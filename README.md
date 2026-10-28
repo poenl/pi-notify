@@ -15,6 +15,8 @@ Notifications fire **only while the terminal window is unfocused**. If you are l
 
 On macOS those two notifications also carry a text field: what you type there is sent to the agent as the next user message. Windows and Linux do not support this.
 
+Windows and Linux notifications carry the pi logo as an attached image (`src/assets/pi.png`). macOS cannot change a notification's icon: the system always uses the icon of the app that sends it.
+
 Terminals that do not report focus (DECSET 1004) never say whether they are focused, so there every finished turn notifies. That covers macOS Terminal.app, `screen`, and tmux without `set -g focus-events on`.
 
 ## Install
@@ -104,6 +106,7 @@ src/config.ts              config types + parseConfig / loadConfig
 src/payload.ts             matchesWhen / pickPath / pickText / truncate / settledNotice
 src/desktop.ts             notify / askNotify / macArgs / audioCommand / playAudio / audioPath
 src/focus.ts               DECSET 1004 focus detection
+src/assets/pi.png          notification icon
 src/sounds/*.wav           notification sounds
 tests/notify.test.ts       cases for parseConfig, matchesWhen, pickPath, pickText, settledNotice, truncate, macArgs, audioCommand and audioPath
 ```

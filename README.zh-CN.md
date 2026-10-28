@@ -15,6 +15,8 @@ pi 扩展：任务完成或失败、以及其他扩展等待你输入时，在 m
 
 macOS 上这两条通知还带一个输入框，输入的文字会作为下一条用户消息发给 agent。Windows 与 Linux 不支持。
 
+Windows 与 Linux 的通知附带 pi 图标（`src/assets/pi.png`）；macOS 无法改通知图标，系统固定取发起通知的 app 的图标。
+
 不上报焦点的终端（DECSET 1004）无法区分你是否在看终端，于是那里每轮收尾都会通知：macOS Terminal.app、`screen`、未开 `set -g focus-events on` 的 tmux 都属于这种情况。
 
 ## 安装
@@ -104,6 +106,7 @@ src/config.ts              配置类型 + parseConfig / loadConfig
 src/payload.ts             matchesWhen / pickPath / pickText / truncate / settledNotice
 src/desktop.ts             notify / askNotify / macArgs / audioCommand / playAudio / audioPath
 src/focus.ts               DECSET 1004 焦点检测
+src/assets/pi.png          通知图标
 src/sounds/*.wav           提示音
 tests/notify.test.ts       parseConfig、matchesWhen、pickPath、pickText、settledNotice、truncate、macArgs、audioCommand、audioPath 的用例
 ```

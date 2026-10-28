@@ -17,8 +17,14 @@ import notifier from 'node-notifier'
 
 import type { AudioConfig, Config } from './config'
 
-/** 声音文件目录：与源码同在 src/ 下，随包分发。 */
-const SOUND_DIR = join(dirname(fileURLToPath(import.meta.url)), 'sounds')
+/** 扩展自身的目录：声音与图标都与之同级，随包分发。 */
+const SRC_DIR = dirname(fileURLToPath(import.meta.url))
+
+/** 声音文件目录。 */
+const SOUND_DIR = join(SRC_DIR, 'sounds')
+
+/** pi 图标：Windows 映射成 -p 的内容图，Linux 映射成 -i；macOS 无法改通知图标。 */
+const PI_ICON = join(SRC_DIR, 'assets', 'pi.png')
 
 /** 内置提示音：配置未指定音频时使用。 */
 const BUILTIN_SOUNDS: Record<keyof AudioConfig, string> = {
@@ -26,10 +32,23 @@ const BUILTIN_SOUNDS: Record<keyof AudioConfig, string> = {
   error: join(SOUND_DIR, 'error.wav')
 }
 
-/** 发系统通知：node-notifier 按平台选实现，缺命令时只回调错误。 */
-export function notify(title: string, body: string): void {
+/**
+ * 发系统通知：macOS 直连二进制，其余平台走 node-notifier。缺命令时只回调错误。
+ * platform 可注入，便于测试两条分支。
+ */
+export function notify(title: string, body: string, platform: string = process.platform): void {
+  // macOS 直连：node-notifier 给每个参数加字面双引号，参数会被当成带引号的字面量
+  if (platform === 'darwin') {
+    const child = execFile(terminalNotifierPath(), macArgs({ title, body }, false), () => {
+      pendingNotifications.delete(child)
+    })
+    // 记进集合：退出时统一 kill，避免管道拖住 pi
+    pendingNotifications.add(child)
+    return
+  }
   // 空回调：目标平台缺命令（如 Linux 无 notify-send）时不影响 pi
-  notifier.notify({ title, message: body }, () => {})
+  // Windows / Linux 的底层不加引号，icon 交给 node-notifier 映射（-p / -i）
+  notifier.notify({ title, message: body, icon: PI_ICON }, () => {})
 }
 
 /** 交互式通知的入参：只有输入框，按钮那条线没有调用者，已删除。 */
@@ -55,21 +74,25 @@ export function notificationChannel(platform: string, wsl: boolean): 'mac' | 'wi
 /** macOS 交互通知等待时长（秒）：超过后通知被系统移除并返回 undefined。 */
 const MAC_TIMEOUT_SECONDS = 600
 
+/** macOS 普通通知的存活时长（秒）：发完不等响应，到点从通知中心移除。 */
+const NOTICE_TIMEOUT_SECONDS = 10
+
 /**
  * macOS 调 terminal-notifier 的参数。
  * 不能用 node-notifier：它给每个参数加字面双引号，参数会被系统当成带引号的字面量。
- * 不传 -timeout 会一直等，进程不退，所以固定给一个上限。
+ * wait 为真表示等人响应：要 JSON 输出，等待上限也更长。
+ * 不加 -appIcon：macOS 没有覆盖通知图标的 API，该参数自 terminal-notifier 3.0.0 起已无效。
  */
-export function macArgs(options: AskNotifyOptions): string[] {
+export function macArgs(options: AskNotifyOptions, wait = true): string[] {
   const args = [
     '-title',
     options.title,
     '-message',
     options.body,
-    '-json',
     '-timeout',
-    String(MAC_TIMEOUT_SECONDS)
+    String(wait ? MAC_TIMEOUT_SECONDS : NOTICE_TIMEOUT_SECONDS)
   ]
+  if (wait) args.push('-json')
   if (options.reply) args.push('-reply', options.reply)
   return args
 }

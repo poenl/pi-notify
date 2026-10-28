@@ -8,6 +8,8 @@ declare module 'node-notifier' {
   interface NotificationOptions {
     title?: string
     message?: string
+    /** 图标路径；node-notifier 会按平台翻译成 -appIcon / -p / -i */
+    icon?: string
   }
 
   interface Notifier {

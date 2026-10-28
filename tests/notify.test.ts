@@ -1,7 +1,14 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import { parseConfig } from '../src/config'
-import { audioCommand, audioPath, macArgs, notificationChannel } from '../src/desktop'
+
+// notify 会起子进程或调库；测试里换成桩，只验证分派，不真的发通知
+const execFileMock = vi.hoisted(() => vi.fn(() => ({ kill: vi.fn() })))
+const notifierMock = vi.hoisted(() => ({ notify: vi.fn() }))
+vi.mock('node:child_process', () => ({ execFile: execFileMock }))
+vi.mock('node-notifier', () => ({ default: notifierMock }))
+
+import { audioCommand, audioPath, macArgs, notificationChannel, notify } from '../src/desktop'
 import { matchesWhen, pickPath, pickText, settledNotice, truncate } from '../src/payload'
 
 describe('parseConfig', () => {
@@ -170,16 +177,49 @@ describe('audioPath', () => {
 })
 
 describe('macArgs', () => {
-  test('总是要求 JSON 输出并带上限，没有输入框时不传 -reply', () => {
+  test('等人响应时带 -json 与长超时，没有输入框时不传 -reply', () => {
     const args = macArgs({ title: 'T', body: 'B' })
     expect(args).toContain('-json')
-    expect(args).toContain('-timeout')
+    expect(args[args.indexOf('-timeout') + 1]).toBe('600')
     expect(args).not.toContain('-reply')
+  })
+
+  test('发完即走的通知不带 -json，超时缩短到 10 秒', () => {
+    const args = macArgs({ title: 'T', body: 'B' }, false)
+    expect(args).not.toContain('-json')
+    expect(args[args.indexOf('-timeout') + 1]).toBe('10')
   })
 
   test('有输入框时传占位文字', () => {
     const args = macArgs({ title: 'T', body: 'B', reply: '输入指令' })
     expect(args[args.indexOf('-reply') + 1]).toBe('输入指令')
+  })
+})
+
+describe('notify', () => {
+  afterEach(() => vi.clearAllMocks())
+
+  test('darwin 直连二进制，不走 node-notifier，也不传已失效的 -appIcon', () => {
+    notify('T', 'B', 'darwin')
+    expect(execFileMock).toHaveBeenCalledTimes(1)
+    const [bin, args] = execFileMock.mock.calls[0] as unknown as [string, string[]]
+    expect(bin).toMatch(/terminal-notifier$/)
+    expect(args).not.toContain('-appIcon')
+    expect(args).toEqual(expect.arrayContaining(['-timeout', '10']))
+    expect(notifierMock.notify).not.toHaveBeenCalled()
+  })
+
+  test('Windows / Linux 把图标交给 node-notifier', () => {
+    notify('T', 'B', 'win32')
+    expect(notifierMock.notify).toHaveBeenCalledWith(
+      expect.objectContaining({
+        title: 'T',
+        message: 'B',
+        icon: expect.stringMatching(/assets[\\/]pi\.png$/)
+      }),
+      expect.any(Function)
+    )
+    expect(execFileMock).not.toHaveBeenCalled()
   })
 })
 

@@ -10,6 +10,7 @@ pi 扩展：任务完成/失败、其他扩展等待用户输入时，发系统�
 - `src/desktop.ts`：系统通知（`notify`）与提示音（`audioCommand` / `playAudio` / `audioPath`）
 - `src/focus.ts`：DECSET 1004 焦点检测（`setupFocus`）
 - `src/sounds/complete.wav`、`src/sounds/error.wav`：内置提示音，配置未指定音频时使用
+- `src/assets/pi.png`：通知附图（透明底 512×512）；仅 Windows/Linux 生效（node-notifier 映射成 `-p` / `-i`），macOS 无覆盖图标的 API，别再加 `-appIcon`
 - `tests/notify.test.ts`：`parseConfig` / `matchesWhen` / `pickPath` / `pickText` / `truncate` / `audioCommand` 的用例
 
 ## 常用命令
