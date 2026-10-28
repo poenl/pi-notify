@@ -1,13 +1,8 @@
-import { describe, expect, test } from 'vitest'
+import { afterEach, describe, expect, test, vi } from 'vitest'
 
-import {
-  escapeAppleScript,
-  matchesWhen,
-  parseConfig,
-  pickPath,
-  pickText,
-  truncate
-} from '../src/index'
+import { parseConfig } from '../src/config'
+import { audioCommand, audioPath } from '../src/desktop'
+import { matchesWhen, pickPath, pickText, truncate } from '../src/payload'
 
 describe('parseConfig', () => {
   test('坏 JSON 与非对象根都视为无自定义事件', () => {
@@ -125,17 +120,52 @@ describe('pickText', () => {
   })
 })
 
-describe('escapeAppleScript', () => {
-  test('反斜杠与双引号被转义，构造串无法闭合字符串字面量', () => {
-    expect(escapeAppleScript('a\\b')).toBe('a\\\\b')
-    expect(escapeAppleScript('say "hi"')).toBe('say \\"hi\\"')
-    // 转义后引号变成 \"，AppleScript 不会把它当成字符串结尾
-    expect(escapeAppleScript('" & do shell script "x')).toBe('\\" & do shell script \\"x')
+describe('audioCommand', () => {
+  // 环境变量在用例之间必须复原，否则一个失败会连带影响后面的平台分支
+  afterEach(() => vi.unstubAllEnvs())
+
+  test('macOS 用 afplay', () => {
+    expect(audioCommand('darwin', '/a.wav', () => false)).toEqual(['afplay', ['/a.wav']])
   })
 
-  test('回车与换行换成空格，不破坏单行字面量', () => {
-    expect(escapeAppleScript('a\r\nb')).toBe('a  b')
-    expect(escapeAppleScript('a\nb')).toBe('a b')
+  test('Windows 用 PowerShell SoundPlayer，路径内单引号翻倍', () => {
+    const command = audioCommand('win32', "C:\\it's\\a.wav", () => false)
+    expect(command?.[0]).toBe('powershell')
+    expect(command?.[1]).toContain("(New-Object Media.SoundPlayer 'C:\\it''s\\a.wav').PlaySync()")
+  })
+
+  test('WSL 借 Windows 侧的 powershell.exe', () => {
+    vi.stubEnv('WSL_DISTRO_NAME', 'Ubuntu')
+    const command = audioCommand('linux', '/a.wav', () => true)
+    expect(command?.[0]).toBe('powershell.exe')
+  })
+
+  test('Linux 按 paplay / aplay / ffplay 顺序探测', () => {
+    // WSL 也会走 linux 分支，这里显式清空以避免在 WSL 机器上误判
+    vi.stubEnv('WSL_DISTRO_NAME', '')
+
+    expect(audioCommand('linux', '/a.wav', (name) => name === 'aplay')).toEqual([
+      'aplay',
+      ['/a.wav']
+    ])
+    expect(audioCommand('linux', '/a.wav', (name) => name === 'ffplay')).toEqual([
+      'ffplay',
+      ['-nodisp', '-autoexit', '-loglevel', 'quiet', '/a.wav']
+    ])
+    expect(audioCommand('linux', '/a.wav', () => true)).toEqual(['paplay', ['/a.wav']])
+    expect(audioCommand('linux', '/a.wav', () => false)).toBeUndefined()
+  })
+})
+
+describe('audioPath', () => {
+  test('配置未指定音频时回退内置提示音', () => {
+    expect(audioPath({ events: [] }, 'success')).toMatch(/sounds\/complete\.wav$/)
+    expect(audioPath({ events: [] }, 'error')).toMatch(/sounds\/error\.wav$/)
+  })
+
+  test('配置的音频文件不存在时同样回退内置', () => {
+    const config = { events: [], audio: { success: '/definitely/missing.wav' } }
+    expect(audioPath(config, 'success')).toMatch(/sounds\/complete\.wav$/)
   })
 })
 

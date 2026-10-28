@@ -2,7 +2,7 @@
   "name": "pi-notify",
   "version": "0.1.0",
   "private": true,
-  "description": "pi 扩展：任务完成/失败、其他扩展等待用户输入时发 macOS 系统通知",
+  "description": "pi 扩展：任务完成/失败、其他扩展等待用户输入时发系统通知（macOS / Windows / Linux）",
   "type": "module",
   "license": "MIT",
   "pi": {
@@ -11,7 +11,7 @@
     ]
   },
   "engines": {
-    "node": ">=22"
+    "node": "^22.22.2 || ^24.15.0 || >=26.0.0"
   },
   "scripts": {
     "check": "tsc --noEmit && eslint --cache --cache-location node_modules/.cache/eslint/.eslintcache .",
@@ -32,5 +32,8 @@
     "typescript": "^6.0.3",
     "typescript-eslint": "^8.71.0",
     "vitest": "^5.0.3"
+  },
+  "dependencies": {
+    "node-notifier": "11.0.0"
   }
 }

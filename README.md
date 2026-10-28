@@ -2,7 +2,7 @@
 
 # pi-notify
 
-A pi extension: posts macOS system notifications when a task finishes or fails, and when another extension is waiting for your input.
+A pi extension: posts system notifications on macOS, Windows and Linux when a task finishes or fails, and when another extension is waiting for your input.
 
 ## What you get
 
@@ -12,6 +12,8 @@ A pi extension: posts macOS system notifications when a task finishes or fails, 
 | the turn fails                | ❌ Task Failed — error message                    | error   |
 
 Notifications fire **only while the terminal window is unfocused**. If you are looking at the terminal, nothing pops up.
+
+Terminals that do not report focus (DECSET 1004) never say whether they are focused, so there every finished turn notifies. That covers macOS Terminal.app, `screen`, and tmux without `set -g focus-events on`.
 
 ## Install
 
@@ -27,7 +29,11 @@ Try it for a single invocation (current process only, nothing written to setting
 pi -e git:github.com/poenl/pi-notify
 ```
 
-Requires macOS (`osascript` and `afplay`) and Node >= 22.
+Requires Node `^22.22.2 || ^24.15.0 || >=26.0.0` (the range `node-notifier` needs). Notifications go through `node-notifier`: `terminal-notifier` on macOS, `snoretoast` on Windows and WSL, `notify-send` on Linux (install `libnotify`). Sounds play through `afplay` on macOS, PowerShell `SoundPlayer` on Windows and WSL, and the first available of `paplay` / `aplay` / `ffplay` on Linux.
+
+The macOS notifier binary shipped by `node-notifier` is x86_64 only, so Apple Silicon needs Rosetta 2 installed.
+
+On macOS, allow `terminal-notifier` and pick Banners in System Settings → Notifications, otherwise nothing pops up. Reinstalling dependencies may need re-approval.
 
 ## Notify on other extensions' events
 
@@ -77,7 +83,7 @@ Rules:
 
 - **Finish / failure** comes from `agent_settled`, not `agent_end`: retries, compaction and queued messages can start another run after `agent_end`, which would notify too early or twice. The body is read from the last message on the current session branch.
 - **Custom events** subscribe to the configured `pi.events` channels at load time and unsubscribe on `session_shutdown`.
-- **Focus detection** enables DECSET 1004 (`\x1b[?1004h`) through the real TUI obtained from `ctx.ui.setWidget`, and listens for `\x1b[O` / `\x1b[I` on raw `process.stdin`. `ctx.ui.onTerminalInput` cannot be used: the alt-screen viewport listener registers first and consumes focus sequences. Terminals without 1004 support never report focus, so the state stays "focused" and nothing is notified.
+- **Focus detection** enables DECSET 1004 (`\x1b[?1004h`) through the real TUI obtained from `ctx.ui.setWidget`, and listens for `\x1b[O` / `\x1b[I` on raw `process.stdin`. `ctx.ui.onTerminalInput` cannot be used: the alt-screen viewport listener registers first and consumes focus sequences. Terminals without 1004 support never report focus, so the state stays "unfocused" and every turn notifies.
 
 ## Commands
 
@@ -90,7 +96,11 @@ pnpm format   # prettier --write
 ## Layout
 
 ```text
-src/index.ts               entry: config parsing + event wiring + agent_settled + focus detection
-src/sounds/*.wav           notification sounds played by afplay
-tests/notify.test.ts       cases for parseConfig, matchesWhen, pickPath, pickText and truncate
+src/index.ts               entry: event wiring + agent_settled + session lifecycle
+src/config.ts              config types + parseConfig / loadConfig
+src/payload.ts             matchesWhen / pickPath / pickText / truncate
+src/desktop.ts             notify + audioCommand / playAudio / audioPath
+src/focus.ts               DECSET 1004 focus detection
+src/sounds/*.wav           notification sounds
+tests/notify.test.ts       cases for parseConfig, matchesWhen, pickPath, pickText, truncate and audioCommand
 ```
