@@ -1,8 +1,8 @@
 import { afterEach, describe, expect, test, vi } from 'vitest'
 
 import { parseConfig } from '../src/config'
-import { audioCommand, audioPath } from '../src/desktop'
-import { matchesWhen, pickPath, pickText, truncate } from '../src/payload'
+import { audioCommand, audioPath, macArgs, notificationChannel } from '../src/desktop'
+import { matchesWhen, pickPath, pickText, settledNotice, truncate } from '../src/payload'
 
 describe('parseConfig', () => {
   test('坏 JSON 与非对象根都视为无自定义事件', () => {
@@ -166,6 +166,49 @@ describe('audioPath', () => {
   test('配置的音频文件不存在时同样回退内置', () => {
     const config = { events: [], audio: { success: '/definitely/missing.wav' } }
     expect(audioPath(config, 'success')).toMatch(/sounds\/complete\.wav$/)
+  })
+})
+
+describe('macArgs', () => {
+  test('总是要求 JSON 输出并带上限，没有输入框时不传 -reply', () => {
+    const args = macArgs({ title: 'T', body: 'B' })
+    expect(args).toContain('-json')
+    expect(args).toContain('-timeout')
+    expect(args).not.toContain('-reply')
+  })
+
+  test('有输入框时传占位文字', () => {
+    const args = macArgs({ title: 'T', body: 'B', reply: '输入指令' })
+    expect(args[args.indexOf('-reply') + 1]).toBe('输入指令')
+  })
+})
+
+describe('notificationChannel', () => {
+  test('按平台与 WSL 选实现', () => {
+    expect(notificationChannel('darwin', false)).toBe('mac')
+    expect(notificationChannel('win32', false)).toBe('windows')
+    expect(notificationChannel('linux', true)).toBe('windows')
+    expect(notificationChannel('linux', false)).toBe('linux')
+  })
+})
+
+describe('settledNotice', () => {
+  test('完成与失败各有标题与占位文字，正文按码点截断', () => {
+    expect(settledNotice(false, undefined, '做完了')).toEqual({
+      title: '✅ Task Complete',
+      body: '做完了',
+      reply: '输入下一步指令'
+    })
+    expect(settledNotice(true, '连接超时', '')).toEqual({
+      title: '❌ Task Failed',
+      body: '连接超时',
+      reply: '输入指令继续'
+    })
+  })
+
+  test('正文为空字符串时回退到兜底文案', () => {
+    expect(settledNotice(true, '', '').body).toBe('任务失败')
+    expect(settledNotice(false, undefined, '').body).toBe('任务已完成')
   })
 })
 

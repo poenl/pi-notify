@@ -17,9 +17,9 @@ import type { ExtensionAPI, SessionMessageEntry } from '@earendil-works/pi-codin
 import { Container } from '@earendil-works/pi-tui'
 
 import { loadConfig } from './config'
-import { audioPath, notify, playAudio } from './desktop'
+import { askNotify, audioPath, killPendingNotifications, notify, playAudio } from './desktop'
 import { setupFocus } from './focus'
-import { matchesWhen, pickText, truncate } from './payload'
+import { matchesWhen, pickText, settledNotice, truncate } from './payload'
 
 /** agent_settled 里用来判断成败的字段；事件体不带消息，只能从会话分支取。 */
 interface NotifyMessage {
@@ -38,6 +38,17 @@ export default function (pi: ExtensionAPI) {
   const unsubscribers: (() => void)[] = []
   /** 焦点检测的清理函数，由 session_start 的 setWidget 回调建立。 */
   let cleanupFocus: (() => void) | undefined
+
+  /** 通知里输入的文本当作一轮用户消息发回 agent；没输入、通知失败都静默。 */
+  const replyToAgent = (value: Promise<string | undefined>) => {
+    void value
+      .then((text) => {
+        if (text) pi.sendUserMessage(text, { deliverAs: 'followUp' })
+      })
+      .catch(() => {
+        // 通知或发消息失败不影响 pi
+      })
+  }
 
   for (const rule of config.events) {
     unsubscribers.push(
@@ -86,22 +97,17 @@ export default function (pi: ExtensionAPI) {
         .filter((entry): entry is SessionMessageEntry => entry.type === 'message')
         .at(-1)?.message as NotifyMessage | undefined
       const isError = last?.stopReason === 'error' || Boolean(last?.errorMessage)
-
-      if (isError) {
-        playAudio(audioPath(config, 'error'))
-        // 错误消息可能上千字符，与完成通知共用同一截断长度
-        notify('❌ Task Failed', truncate(last?.errorMessage ?? '任务失败'))
-        return
-      }
-      // 完成：最后 assistant 文本（截断 120 字符），完成音 complete.wav
+      // 掌握：最后 assistant 文本（截断 120 字符），完成音 complete.wav
       const text =
         last?.content
           ?.filter((c) => c.type === 'text')
           .map((c) => c.text ?? '')
           .join('')
           .trim() ?? ''
-      playAudio(audioPath(config, 'success'))
-      notify('✅ Task Complete', truncate(text) || '任务已完成')
+
+      playAudio(audioPath(config, isError ? 'error' : 'success'))
+      // 只有 macOS 会显示输入框，其他平台由 askNotify 内部退化成普通通知
+      replyToAgent(askNotify(settledNotice(isError, last?.errorMessage, text)))
     } catch {
       // 通知失败不影响 pi
     }
@@ -112,5 +118,7 @@ export default function (pi: ExtensionAPI) {
     cleanupFocus?.()
     cleanupFocus = undefined
     terminalUnfocused = true
+    // 结束还在等人的通知，否则子进程会拖住 pi 退出
+    killPendingNotifications()
   })
 }

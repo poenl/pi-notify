@@ -13,6 +13,8 @@ A pi extension: posts system notifications on macOS, Windows and Linux when a ta
 
 Notifications fire **only while the terminal window is unfocused**. If you are looking at the terminal, nothing pops up.
 
+On macOS those two notifications also carry a text field: what you type there is sent to the agent as the next user message. Windows and Linux do not support this.
+
 Terminals that do not report focus (DECSET 1004) never say whether they are focused, so there every finished turn notifies. That covers macOS Terminal.app, `screen`, and tmux without `set -g focus-events on`.
 
 ## Install
@@ -82,6 +84,7 @@ Rules:
 ## How it works
 
 - **Finish / failure** comes from `agent_settled`, not `agent_end`: retries, compaction and queued messages can start another run after `agent_end`, which would notify too early or twice. The body is read from the last message on the current session branch.
+- **Replying from the notification** works on macOS only. Only the newest notification waits at a time, and `session_shutdown` kills whatever is still pending. Windows and Linux only get a plain notification and never return text.
 - **Custom events** subscribe to the configured `pi.events` channels at load time and unsubscribe on `session_shutdown`.
 - **Focus detection** enables DECSET 1004 (`\x1b[?1004h`) through the real TUI obtained from `ctx.ui.setWidget`, and listens for `\x1b[O` / `\x1b[I` on raw `process.stdin`. `ctx.ui.onTerminalInput` cannot be used: the alt-screen viewport listener registers first and consumes focus sequences. Terminals without 1004 support never report focus, so the state stays "unfocused" and every turn notifies.
 
@@ -98,9 +101,9 @@ pnpm format   # prettier --write
 ```text
 src/index.ts               entry: event wiring + agent_settled + session lifecycle
 src/config.ts              config types + parseConfig / loadConfig
-src/payload.ts             matchesWhen / pickPath / pickText / truncate
-src/desktop.ts             notify + audioCommand / playAudio / audioPath
+src/payload.ts             matchesWhen / pickPath / pickText / truncate / settledNotice
+src/desktop.ts             notify / askNotify / macArgs / audioCommand / playAudio / audioPath
 src/focus.ts               DECSET 1004 focus detection
 src/sounds/*.wav           notification sounds
-tests/notify.test.ts       cases for parseConfig, matchesWhen, pickPath, pickText, truncate and audioCommand
+tests/notify.test.ts       cases for parseConfig, matchesWhen, pickPath, pickText, settledNotice, truncate, macArgs, audioCommand and audioPath
 ```

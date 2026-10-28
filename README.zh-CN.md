@@ -13,6 +13,8 @@ pi 扩展：任务完成或失败、以及其他扩展等待你输入时，在 m
 
 只在**终端窗口失焦**时通知。你正看着终端时不会弹任何东西。
 
+macOS 上这两条通知还带一个输入框，输入的文字会作为下一条用户消息发给 agent。Windows 与 Linux 不支持。
+
 不上报焦点的终端（DECSET 1004）无法区分你是否在看终端，于是那里每轮收尾都会通知：macOS Terminal.app、`screen`、未开 `set -g focus-events on` 的 tmux 都属于这种情况。
 
 ## 安装
@@ -82,6 +84,7 @@ macOS：在「系统设置 → 通知」里给 terminal-notifier 允许通知并
 ## 工作原理
 
 - **完成/失败**取自 `agent_settled`，不用 `agent_end`：重试、压缩、排队消息都会在 `agent_end` 之后再启动一次运行，用 `agent_end` 会提前或重复通知。正文读取当前会话分支的最后一条消息。
+- **在通知里回复**仅 macOS 支持。同一时刻只有最新一条通知处于等待状态，`session_shutdown` 会结束还没响应的进程；Windows 与 Linux 只发普通通知，不返回文本。
 - **自定义事件**在加载时按配置订阅 `pi.events` 通道，`session_shutdown` 时统一退订。
 - **焦点检测**通过 `ctx.ui.setWidget` 拿到真 TUI 后开启 DECSET 1004（`\x1b[?1004h`），在 `process.stdin` 原始层监听 `\x1b[O` / `\x1b[I`。不能用 `ctx.ui.onTerminalInput`：alt-screen 的 viewport 监听器先注册并会 consume 焦点序列。终端不支持 1004 时永远收不到焦点事件，状态保持「失焦」，即每轮都通知。
 
@@ -98,9 +101,9 @@ pnpm format   # prettier --write
 ```text
 src/index.ts               入口：事件接线 + agent_settled + 会话生命周期
 src/config.ts              配置类型 + parseConfig / loadConfig
-src/payload.ts             matchesWhen / pickPath / pickText / truncate
-src/desktop.ts             notify + audioCommand / playAudio / audioPath
+src/payload.ts             matchesWhen / pickPath / pickText / truncate / settledNotice
+src/desktop.ts             notify / askNotify / macArgs / audioCommand / playAudio / audioPath
 src/focus.ts               DECSET 1004 焦点检测
 src/sounds/*.wav           提示音
-tests/notify.test.ts       parseConfig、matchesWhen、pickPath、pickText、truncate、audioCommand 的用例
+tests/notify.test.ts       parseConfig、matchesWhen、pickPath、pickText、settledNotice、truncate、macArgs、audioCommand、audioPath 的用例
 ```

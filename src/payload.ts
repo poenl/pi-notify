@@ -46,3 +46,24 @@ export function truncate(text: string): string {
   const chars = Array.from(text)
   return chars.length > BODY_LIMIT ? chars.slice(0, BODY_LIMIT - 1).join('') + '…' : text
 }
+
+/** 一轮结束时的通知内容：完成与失败只差标题、正文和输入框占位文字。 */
+export function settledNotice(
+  isError: boolean,
+  errorMessage: string | undefined,
+  text: string
+): { title: string; body: string; reply: string } {
+  if (isError) {
+    // 失败多是网络问题，占位文字引导直接重试；正文为空时用兵底文字
+    return {
+      title: '❌ Task Failed',
+      body: truncate(errorMessage || '任务失败'),
+      reply: '输入指令继续'
+    }
+  }
+  return {
+    title: '✅ Task Complete',
+    body: truncate(text) || '任务已完成',
+    reply: '输入下一步指令'
+  }
+}
