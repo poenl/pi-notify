@@ -2,7 +2,8 @@
  * pi-notify — pi 扩展：任务完成/失败、其他扩展等待用户输入时发系统通知（macOS / Windows / Linux）。
  *
  * 四块职责：
- * - 完成/失败：agent_settled 触发（彻底收工，含重试/压缩/排队跟进之后），正文取会话分支最后一条消息
+ * - 完成/失败：agent_settled 触发（彻底收工，含重试/压缩/排队跟进之后），正文取会话分支最后一条消息；
+ *   事件 aborted 为真（按 Esc 取消）时整轮静音
  * - 自定义事件：配置文件声明哪些 pi.events 通道要通知，正文从事件负载取字段，不再为每个上游扩展改代码
  * - 失焦抑制：内建 DECSET 1004 焦点检测，仅终端失焦/后台时通知；终端不支持 1004 时收不到
  *   任何焦点事件，状态保持「失焦」，即每轮都通知
@@ -86,8 +87,10 @@ export default function (pi: ExtensionAPI) {
     )
   })
 
-  pi.on('agent_settled', (_event, ctx) => {
+  pi.on('agent_settled', (event, ctx) => {
     try {
+      // 手动取消不是一轮正常结束，不通知也不播声音
+      if (event.aborted) return
       // 聚焦抑制：仅终端窗口失焦才通知；聚焦/未知一律静默
       if (!terminalUnfocused) return
 
